@@ -333,6 +333,29 @@ def calculate_availability(variant):
     # Otherwise, check actual inventory
     return 'in stock' if inventory_qty > 0 else 'out of stock'
 
+def product_meets_stock_cap(product, min_sizes_in_stock):
+    """
+    Product-level hard cap on ad exposure: a product only advertises if at
+    least `min_sizes_in_stock` of its variants (sizes) are actually sellable
+    (in stock or preorder). A thin size run (e.g. 1-2 sizes left out of a
+    full run) tends to draw clicks that don't convert, since shoppers'
+    size is often already gone.
+
+    Products with too few total variants to ever reach the floor (e.g.
+    single-variant items like some care products) are exempt and fall back
+    to ordinary per-variant availability.
+    """
+    variants = product.get('variants', [])
+
+    if len(variants) <= min_sizes_in_stock:
+        return True
+
+    sellable = sum(
+        1 for v in variants
+        if calculate_availability(v) in ('in stock', 'preorder')
+    )
+    return sellable >= min_sizes_in_stock
+
 def get_variant_options(product, variant):
     """
     Extract size, color, and other option values for a variant.
@@ -345,7 +368,7 @@ def get_variant_options(product, variant):
             options[option_name] = option_value
     return options
 
-def get_field_value(xml_field, field_spec, product, variant, variant_options, store, channel_mappings):
+def get_field_value(xml_field, field_spec, product, variant, variant_options, store, channel_mappings, product_meets_cap=True):
     """
     Get field value based on field_spec format:
     - "literal string" -> literal value
@@ -360,6 +383,8 @@ def get_field_value(xml_field, field_spec, product, variant, variant_options, st
 
     # Special field handlers
     if xml_field == 'availability':
+        if not product_meets_cap:
+            return 'out of stock'
         return calculate_availability(variant)
 
     if xml_field == 'description':
@@ -437,7 +462,7 @@ def get_field_value(xml_field, field_spec, product, variant, variant_options, st
     # Handle template strings, variant fields, nested fields via existing function
     return extract_field_value(product, variant, field_spec, store)
 
-def products_to_channel_xml(products, store, channel, mapping, channel_mappings):
+def products_to_channel_xml(products, store, channel, mapping, channel_mappings, min_sizes_in_stock=1):
     """
     Generate XML feed with one entry per variant.
     Each variant becomes a separate item with proper item_group_id linking.
@@ -451,6 +476,7 @@ def products_to_channel_xml(products, store, channel, mapping, channel_mappings)
 
     for product in products:
         variants = product.get('variants', [])
+        product_meets_cap = product_meets_stock_cap(product, min_sizes_in_stock)
 
         for variant in variants:
             item = SubElement(channel_elem, 'item')
@@ -487,7 +513,7 @@ def products_to_channel_xml(products, store, channel, mapping, channel_mappings)
                         continue
 
                     # Determine field value based on field_spec
-                    value = get_field_value(xml_field, field_spec, product, variant, variant_options, store, channel_mappings)
+                    value = get_field_value(xml_field, field_spec, product, variant, variant_options, store, channel_mappings, product_meets_cap)
 
                     # Use Google Shopping namespace for standard fields
                     if channel == 'google' and xml_field in ['id', 'title', 'description', 'link',
@@ -577,9 +603,12 @@ def main():
     channel_mappings = load_channel_mappings()
     os.makedirs('feeds', exist_ok=True)
 
+    min_sizes_in_stock = config.get('min_sizes_in_stock', 1)
+
     print("="*60)
     print("Shopify Product Feed Generator")
     print("="*60)
+    print(f"Minimum sellable sizes required to advertise a product: {min_sizes_in_stock}")
 
     for store in config['stores']:
         store_folder = os.path.join('feeds', store['name'])
@@ -595,7 +624,7 @@ def main():
 
         for channel, mapping in channel_mappings['channels'].items():
             print(f"  Generating {channel} feed...")
-            xml_root = products_to_channel_xml(products, store, channel, mapping, channel_mappings)
+            xml_root = products_to_channel_xml(products, store, channel, mapping, channel_mappings, min_sizes_in_stock)
             out_path = os.path.join(store_folder, f"{channel}_{store['language']}_{store['currency']}.xml")
             save_xml(xml_root, out_path)
 

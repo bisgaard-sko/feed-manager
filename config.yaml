@@ -8,6 +8,15 @@
 # GitHub Pages base URL for feed hosting
 github_pages_url: https://bisgaardshoes.github.io/feed-manager
 
+# Product-level hard cap on ad exposure: a product is only advertised
+# (availability: in stock / preorder) if at least this many of its variants
+# (sizes) are actually sellable. Below that, ALL of its variants report
+# "out of stock" in the feed, so it stops showing in Shopping/Meta ads.
+# Products with fewer total variants than this threshold are exempt and use
+# normal per-variant availability (covers single-variant items like some
+# care products). Tune this based on observed Shopping conversion rate.
+min_sizes_in_stock: 3
+
 # Shopify app credentials (shared across all stores)
 client_id: ${SHOPIFY_CLIENT_ID}
 client_secret: ${SHOPIFY_CLIENT_SECRET}

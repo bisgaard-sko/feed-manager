@@ -124,8 +124,12 @@ Each product variant becomes a separate item:
 
 ### Inventory Logic
 
+Availability is decided in two layers:
+
+1. **Per-variant**, same as before — does this specific size have stock?
+
 ```python
-# generate_feeds.py:149-162
+# generate_feeds.py:321-334
 def calculate_availability(variant):
     inventory_qty = variant.get('inventory_quantity', 0)
     inventory_policy = variant.get('inventory_policy', 'deny')
@@ -134,6 +138,18 @@ def calculate_availability(variant):
         return 'preorder'  # Can sell when out of stock
 
     return 'in stock' if inventory_qty > 0 else 'out of stock'
+```
+
+2. **Per-product hard cap** — a product only advertises at all once at least `min_sizes_in_stock` (config.yaml, default `3`) of its sizes are sellable. Below that, every variant of the product reports `out of stock` in the ad feed, regardless of its own availability. This exists because a thin size run (e.g. the last 1-2 sizes left out of a full run) tends to draw ad clicks that don't convert — shoppers' size is often already gone. Products with fewer total variants than the threshold (e.g. single-variant items) are exempt and use plain per-variant availability.
+
+```python
+# generate_feeds.py:336-356
+def product_meets_stock_cap(product, min_sizes_in_stock):
+    variants = product.get('variants', [])
+    if len(variants) <= min_sizes_in_stock:
+        return True
+    sellable = sum(1 for v in variants if calculate_availability(v) in ('in stock', 'preorder'))
+    return sellable >= min_sizes_in_stock
 ```
 
 ## File Structure
