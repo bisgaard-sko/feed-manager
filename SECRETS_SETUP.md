@@ -6,14 +6,17 @@ Your Shopify OAuth credentials are protected and won't be committed to GitHub.
 
 ## How It Works
 
+All stores share **one** Shopify OAuth app (same client ID/secret installed on every store), so there's a single credential pair, not one per store.
+
 ### Local Development
 - Uses `config.local.yaml` (which is in `.gitignore`)
-- This file contains your actual client ID and secret
+- This file only needs to set top-level `client_id`/`client_secret` with your real values
+- `load_config()` merges this over `config.yaml`, inheriting the store list from there automatically — no need to duplicate stores locally
 - **Never gets committed to Git**
 
 ### GitHub Actions (Production)
-- Uses `config.yaml` with environment variable placeholders: `${SHOPIFY_CLIENT_ID_FR}`
-- Reads credentials from GitHub Secrets
+- Uses `config.yaml` with environment variable placeholders: `${SHOPIFY_CLIENT_ID}` / `${SHOPIFY_CLIENT_SECRET}`
+- The workflow sets these once as job-level env vars, read from GitHub Secrets
 - Secrets are encrypted and never exposed in logs
 
 ## 🚀 Setup Instructions
@@ -23,9 +26,9 @@ Your Shopify OAuth credentials are protected and won't be committed to GitHub.
 1. Go to your GitHub repository
 2. Click **Settings** → **Secrets and variables** → **Actions**
 3. Click **New repository secret**
-4. Add your secrets (for each store):
-   - **Name**: `SHOPIFY_CLIENT_ID_FR` / **Value**: Your client ID
-   - **Name**: `SHOPIFY_CLIENT_SECRET_FR` / **Value**: Your client secret
+4. Add exactly two secrets (shared across all stores, no per-store suffix):
+   - **Name**: `SHOPIFY_CLIENT_ID` / **Value**: Your client ID
+   - **Name**: `SHOPIFY_CLIENT_SECRET` / **Value**: Your client secret
 5. Click **Add secret** for each
 
 ### Step 2: Push to GitHub
@@ -44,11 +47,11 @@ GitHub's push protection will no longer block you because `config.yaml` only con
 
 ```
 Feed Manager/
-├── config.yaml              # Safe to commit (uses ${VARIABLES})
-├── config.local.yaml        # NEVER committed (has real credentials)
+├── config.yaml              # Safe to commit (uses ${VARIABLES}); also the store list
+├── config.local.yaml        # NEVER committed (has real credentials only, no store list)
 ├── .gitignore               # Ignores config.local.yaml
 └── .github/workflows/
-    └── generate-feeds.yml   # Uses secrets.SHOPIFY_CLIENT_ID_FR etc.
+    └── generate-feeds.yml   # Uses secrets.SHOPIFY_CLIENT_ID / secrets.SHOPIFY_CLIENT_SECRET
 ```
 
 ## 🧪 Testing
@@ -62,68 +65,17 @@ python generate_feeds.py
 ### Testing with Environment Variables
 ```bash
 # Simulates GitHub Actions environment
-export SHOPIFY_CLIENT_ID_FR="your_client_id"
-export SHOPIFY_CLIENT_SECRET_FR="your_client_secret"
+export SHOPIFY_CLIENT_ID="your_client_id"
+export SHOPIFY_CLIENT_SECRET="your_client_secret"
 mv config.local.yaml config.local.yaml.bak  # Temporarily hide local config
 python generate_feeds.py
 mv config.local.yaml.bak config.local.yaml  # Restore
-unset SHOPIFY_CLIENT_ID_FR SHOPIFY_CLIENT_SECRET_FR
+unset SHOPIFY_CLIENT_ID SHOPIFY_CLIENT_SECRET
 ```
 
 ## 🔄 Adding More Stores
 
-### 1. Update config.yaml (safe to commit)
-```yaml
-stores:
-  - name: FR
-    shop_domain: bisgaardshoes-fr.myshopify.com
-    customer_domain: bisgaardshoes.fr
-    client_id: ${SHOPIFY_CLIENT_ID_FR}
-    client_secret: ${SHOPIFY_CLIENT_SECRET_FR}
-    language: fr
-    currency: EUR
-
-  - name: DE
-    shop_domain: bisgaardshoes-de.myshopify.com
-    customer_domain: bisgaardshoes.de
-    client_id: ${SHOPIFY_CLIENT_ID_DE}
-    client_secret: ${SHOPIFY_CLIENT_SECRET_DE}
-    language: de
-    currency: EUR
-```
-
-### 2. Update config.local.yaml (for local dev)
-```yaml
-stores:
-  - name: FR
-    shop_domain: bisgaardshoes-fr.myshopify.com
-    customer_domain: bisgaardshoes.fr
-    client_id: YOUR_FR_CLIENT_ID
-    client_secret: YOUR_FR_CLIENT_SECRET
-    language: fr
-    currency: EUR
-
-  - name: DE
-    shop_domain: bisgaardshoes-de.myshopify.com
-    customer_domain: bisgaardshoes.de
-    client_id: YOUR_DE_CLIENT_ID
-    client_secret: YOUR_DE_CLIENT_SECRET
-    language: de
-    currency: EUR
-```
-
-### 3. Add GitHub Secrets
-- `SHOPIFY_CLIENT_ID_DE`: Your DE store client ID
-- `SHOPIFY_CLIENT_SECRET_DE`: Your DE store client secret
-
-### 4. Update GitHub Actions workflow
-```yaml
-env:
-  SHOPIFY_CLIENT_ID_FR: ${{ secrets.SHOPIFY_CLIENT_ID_FR }}
-  SHOPIFY_CLIENT_SECRET_FR: ${{ secrets.SHOPIFY_CLIENT_SECRET_FR }}
-  SHOPIFY_CLIENT_ID_DE: ${{ secrets.SHOPIFY_CLIENT_ID_DE }}
-  SHOPIFY_CLIENT_SECRET_DE: ${{ secrets.SHOPIFY_CLIENT_SECRET_DE }}
-```
+Since credentials are shared across all stores, adding a store doesn't need new secrets or workflow changes — it's a single block added to `config.yaml`'s `stores:` list. See the "Adding More Stores" section in `README.md` for the exact steps.
 
 ## ✅ Verification
 

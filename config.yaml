@@ -23,22 +23,32 @@ client_secret: ${SHOPIFY_CLIENT_SECRET}
 
 stores:
   - name: FR
+    display_name: France
     shop_domain: bisgaardshoes-fr.myshopify.com
     customer_domain: bisgaard.fr
     language: fr
     currency: EUR
   - name: EN
+    display_name: English
     shop_domain: bisgaardshoes-en.myshopify.com
     customer_domain: bisgaardshoes.com
     language: en
     currency: EUR
   - name: DK
+    display_name: Denmark
     shop_domain: bisgaardshoes-dk.myshopify.com
     customer_domain: bisgaardshoes.dk
     language: da
     currency: DKK
   - name: DE
+    display_name: Germany
     shop_domain: bisgaardshoes-de.myshopify.com
     customer_domain: bisgaardshoes.de
     language: de
+    currency: EUR
+  - name: NL
+    display_name: Netherlands
+    shop_domain: bisgaard-nl.myshopify.com
+    customer_domain: bisgaardschoenen.nl
+    language: nl
     currency: EUR

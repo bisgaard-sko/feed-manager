@@ -31,15 +31,17 @@ pip install -r requirements.txt
 
 ### 2. Configure Your Store
 
-Edit `config.yaml`:
+Edit `config.yaml`. Shopify app credentials are shared across all stores (one app, installed on each store) and set once at the top level; each store just needs its own domains/locale:
 
 ```yaml
+client_id: ${SHOPIFY_CLIENT_ID}
+client_secret: ${SHOPIFY_CLIENT_SECRET}
+
 stores:
   - name: FR
+    display_name: France
     shop_domain: your-store.myshopify.com
     customer_domain: your-store.com
-    client_id: ${SHOPIFY_CLIENT_ID_FR}
-    client_secret: ${SHOPIFY_CLIENT_SECRET_FR}
     language: fr
     currency: EUR
 ```
@@ -51,7 +53,8 @@ stores:
 4. In your app settings, go to "Configuration" → "Admin API access scopes"
 5. Enable `read_products` scope and save
 6. Copy the **Client ID** and **Client secret** from "Client credentials"
-7. Install the app on your store
+7. Install the app on each store (all stores share the same app/credentials)
+8. Add `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` as GitHub Actions secrets (Settings → Secrets and variables → Actions) — no per-store suffix needed
 
 > ⚠️ **Note**: As of January 2026, Shopify uses OAuth client credentials instead of permanent tokens. The feed generator automatically obtains short-lived access tokens (valid 24 hours) using your client credentials.
 
@@ -171,28 +174,21 @@ Feed Manager/
 
 ## Adding More Stores
 
-Edit `config.yaml` to add additional stores:
+Since all stores share one Shopify app/credential pair, adding a store is a single edit to `config.yaml` — add one block to the `stores:` list:
 
 ```yaml
 stores:
-  - name: FR
-    shop_domain: store-fr.myshopify.com
-    customer_domain: store-fr.com
-    client_id: ${SHOPIFY_CLIENT_ID_FR}
-    client_secret: ${SHOPIFY_CLIENT_SECRET_FR}
-    language: fr
-    currency: EUR
-
-  - name: DE
-    shop_domain: store-de.myshopify.com
-    customer_domain: store-de.com
-    client_id: ${SHOPIFY_CLIENT_ID_DE}
-    client_secret: ${SHOPIFY_CLIENT_SECRET_DE}
-    language: de
+  - name: NL
+    display_name: Netherlands
+    shop_domain: store-nl.myshopify.com
+    customer_domain: store-nl.com
+    language: nl
     currency: EUR
 ```
 
-Remember to add the corresponding GitHub Secrets for each store's credentials.
+That's it — no new GitHub Secrets and no workflow changes needed (`SHOPIFY_CLIENT_ID`/`SHOPIFY_CLIENT_SECRET` already apply to every store). `docs/index.html`'s feed listing is auto-generated from this same store list on every run (between the `STORES_START`/`STORES_END` markers in its `<script>` block), so it never needs manual editing either.
+
+For local development, `config.local.yaml` doesn't need a `stores:` list at all — `load_config()` merges it over `config.yaml`, so the store list is inherited automatically. Only add a `stores:` override there if you want to test against a subset of stores locally.
 
 Feeds will be generated for each store automatically.
 

@@ -5,24 +5,37 @@ import yaml
 from xml.etree.ElementTree import Element, SubElement, tostring, ElementTree
 
 # Load config
-def load_config(path='config.yaml'):
-    """Load config with environment variable substitution."""
-    # Try local config first (for development)
-    if os.path.exists('config.local.yaml'):
-        path = 'config.local.yaml'
-
+def _load_yaml_with_env(path):
+    """Load a YAML file, substituting ${VAR} placeholders from the environment."""
     with open(path, 'r') as f:
         config_text = f.read()
 
-    # Replace ${VAR} with environment variables
-    import re
     def replace_env_var(match):
         var_name = match.group(1)
         return os.environ.get(var_name, match.group(0))
 
     config_text = re.sub(r'\$\{([^}]+)\}', replace_env_var, config_text)
 
-    return yaml.safe_load(config_text)
+    return yaml.safe_load(config_text) or {}
+
+def load_config(path='config.yaml', local_path='config.local.yaml'):
+    """
+    Load config.yaml, then merge config.local.yaml on top for local dev.
+
+    config.local.yaml only needs to define the keys it wants to override
+    (typically client_id/client_secret with real credentials). Any key it
+    doesn't define -- including `stores` -- is inherited unchanged from
+    config.yaml, so the store list doesn't need to be duplicated locally.
+    If config.local.yaml does define `stores`, that list fully replaces
+    config.yaml's (useful for testing against a subset of stores locally).
+    """
+    config = _load_yaml_with_env(path)
+
+    if os.path.exists(local_path):
+        local_config = _load_yaml_with_env(local_path)
+        config.update(local_config)
+
+    return config
 
 def get_access_token(store, config):
     """
@@ -598,6 +611,60 @@ def copy_feeds_to_docs():
 
     return copied_files
 
+INDEX_STORES_START = '// STORES_START (auto-generated from config.yaml by generate_feeds.py - do not edit by hand)'
+INDEX_STORES_END = '// STORES_END'
+
+def render_stores_js(stores):
+    """Render the `const stores = [...]` JS block for docs/index.html from the store list."""
+    entries = ',\n'.join(
+        "            {{ code: '{code}', lang: '{lang}', currency: '{currency}', name: '{name}' }}".format(
+            code=store['name'],
+            lang=store['language'],
+            currency=store['currency'],
+            name=store.get('display_name', store['name']),
+        )
+        for store in stores
+    )
+    # Note: the opening marker's own leading whitespace is preserved by the
+    # caller's regex match (it starts at "//", not at the line start), so
+    # this template must not indent its own first line.
+    return (
+        f"{INDEX_STORES_START}\n"
+        f"        const stores = [\n"
+        f"{entries}\n"
+        f"        ];\n"
+        f"        {INDEX_STORES_END}"
+    )
+
+def update_docs_index_html(config, index_path='docs/index.html'):
+    """
+    Replace the auto-generated stores array in docs/index.html with the
+    current store list from config.yaml, so the feed listing page can't
+    drift from config.yaml again.
+    """
+    if not os.path.exists(index_path):
+        print(f"  ⚠ {index_path} not found, skipping index.html update")
+        return
+
+    with open(index_path, 'r') as f:
+        html = f.read()
+
+    pattern = re.compile(
+        re.escape(INDEX_STORES_START) + r'.*?' + re.escape(INDEX_STORES_END),
+        re.DOTALL,
+    )
+    if not pattern.search(html):
+        print(f"  ⚠ Marker comments not found in {index_path}; skipping auto-update")
+        return
+
+    new_html = pattern.sub(lambda m: render_stores_js(config['stores']), html)
+    if new_html != html:
+        with open(index_path, 'w') as f:
+            f.write(new_html)
+        print(f"  ✓ Updated store list in {index_path}")
+    else:
+        print(f"  ✓ {index_path} store list already up to date")
+
 def main():
     config = load_config()
     channel_mappings = load_channel_mappings()
@@ -638,6 +705,9 @@ def main():
 
     # Copy feeds to docs/ for GitHub Pages
     copied_files = copy_feeds_to_docs()
+
+    # Keep the docs/index.html store list in sync with config.yaml
+    update_docs_index_html(config)
 
     # Show GitHub Pages URLs
     if copied_files:

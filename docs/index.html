@@ -205,13 +205,15 @@
     <script>
         const baseUrl = window.location.origin + window.location.pathname.replace('/index.html', '').replace(/\/$/, '');
 
-        // Store configurations - add new stores here
+        // STORES_START (auto-generated from config.yaml by generate_feeds.py - do not edit by hand)
         const stores = [
-            { code: 'EN', lang: 'en', currency: 'EUR', name: 'English' },
             { code: 'FR', lang: 'fr', currency: 'EUR', name: 'France' },
+            { code: 'EN', lang: 'en', currency: 'EUR', name: 'English' },
             { code: 'DK', lang: 'da', currency: 'DKK', name: 'Denmark' },
-            { code: 'DE', lang: 'de', currency: 'EUR', name: 'Germany' }
+            { code: 'DE', lang: 'de', currency: 'EUR', name: 'Germany' },
+            { code: 'NL', lang: 'nl', currency: 'EUR', name: 'Netherlands' }
         ];
+        // STORES_END
 
         const feeds = stores.flatMap(store => [
             { name: `${store.name} - Google Shopping`, file: `${store.code}_google_${store.lang}_${store.currency}.xml.gz` },
